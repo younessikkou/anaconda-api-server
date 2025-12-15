@@ -116,9 +116,40 @@ app.post('/api/verify-license', async (req, res) => {
             });
         }
 
+        // 🔧 PREMIÈRE ACTIVATION : Enregistrer le HWID automatiquement
+        let isFirstActivation = false;
+        if (!license.hwid || license.hwid === null) {
+            isFirstActivation = true;
+            
+            // Mettre à jour le HWID dans JSONBin
+            const licenseIndex = licenses.authorizedKeys.findIndex(k => k.key === licenseKey);
+            licenses.authorizedKeys[licenseIndex].hwid = hwid;
+            licenses.authorizedKeys[licenseIndex].hwidRegisteredAt = new Date().toISOString();
+            
+            // Enregistrer dans JSONBin
+            const updateResponse = await fetch(JSONBIN_CONFIGS.licenses.UPDATE_URL, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY
+                },
+                body: JSON.stringify(licenses)
+            });
+
+            if (!updateResponse.ok) {
+                console.error('Failed to update HWID in JSONBin');
+            } else {
+                console.log(`✅ HWID registered for ${licenseKey}: ${hwid}`);
+                // Mettre à jour l'objet license pour la réponse
+                license.hwid = hwid;
+                license.hwidRegisteredAt = licenses.authorizedKeys[licenseIndex].hwidRegisteredAt;
+            }
+        }
+
         // ✅ Licence valide
         res.json({ 
-            success: true, 
+            success: true,
+            firstActivation: isFirstActivation,
             license: {
                 key: license.key,
                 user: license.user,
