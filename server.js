@@ -290,6 +290,83 @@ app.get('/api/dynamic-config', async (req, res) => {
     }
 });
 
+// 5️⃣ Envoyer notification Telegram (sécurisé)
+app.post('/api/send-telegram', async (req, res) => {
+    try {
+        const { chatId, message, licenseKey } = req.body;
+
+        if (!chatId || !message || !licenseKey) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Missing required fields: chatId, message, licenseKey' 
+            });
+        }
+
+        // Vérifier que la licence est valide avant d'envoyer
+        const licenseResponse = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
+            headers: {
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY
+            }
+        });
+
+        if (!licenseResponse.ok) {
+            throw new Error('Failed to verify license');
+        }
+
+        const licenseData = await licenseResponse.json();
+        const license = licenseData.record.authorizedKeys.find(k => k.key === licenseKey);
+
+        if (!license || !license.active) {
+            return res.json({ 
+                success: false, 
+                error: 'Invalid or inactive license' 
+            });
+        }
+
+        // Envoyer le message Telegram via le BOT_TOKEN sécurisé
+        const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+        
+        if (!telegramBotToken) {
+            console.error('TELEGRAM_BOT_TOKEN not configured');
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Telegram not configured' 
+            });
+        }
+
+        const telegramUrl = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+        
+        const telegramResponse = await fetch(telegramUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: message,
+                parse_mode: 'HTML'
+            })
+        });
+
+        const telegramResult = await telegramResponse.json();
+
+        if (telegramResult.ok) {
+            console.log(`✅ Telegram message sent to ${chatId}`);
+            res.json({ success: true, messageId: telegramResult.result.message_id });
+        } else {
+            console.error('Telegram API error:', telegramResult);
+            res.json({ success: false, error: 'Failed to send Telegram message' });
+        }
+
+    } catch (error) {
+        console.error('Error sending Telegram:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Server error' 
+        });
+    }
+});
+
 // 5️⃣ Health check
 app.get('/health', (req, res) => {
     res.json({ 
