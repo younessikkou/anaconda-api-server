@@ -367,12 +367,31 @@ app.post('/api/send-telegram', async (req, res) => {
     }
 });
 
-// 5️⃣ Health check
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString() 
-    });
+// 6️⃣ Endpoint pour récupérer la configuration (pour le userscript)
+app.get('/api/config', (req, res) => {
+    try {
+        const config = {
+            DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
+            LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
+            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID,
+            JSONBIN_MASTER_KEY: process.env.JSONBIN_MASTER_KEY,
+            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN
+        };
+
+        console.log('📡 Config requested');
+        console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
+        console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
+        console.log('🔑 MASTER_KEY:', config.JSONBIN_MASTER_KEY ? 'Present ✓' : 'Missing ✗');
+        console.log('📱 BOT_TOKEN:', config.TELEGRAM_BOT_TOKEN ? 'Present ✓' : 'Missing ✗');
+
+        res.json(config);
+    } catch (error) {
+        console.error('❌ Error in /api/config:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: error.message 
+        });
+    }
 });
 
 // 6️⃣ Route racine
