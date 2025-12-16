@@ -41,7 +41,182 @@ const JSONBIN_CONFIGS = {
 // 🔐 API ENDPOINTS
 // ========================================
 
-// 1️⃣ Vérifier une licence + HWID
+// 0️⃣ Route racine
+app.get('/', (req, res) => {
+    res.json({ 
+        message: '🐍 ANACONDA API Server',
+        version: '2.0.0',
+        endpoints: [
+            'GET /api/config - Get initial configuration',
+            'GET /api/licenses - Get all licenses (secure)',
+            'PUT /api/licenses/update - Update licenses (secure)',
+            'GET /api/countries - Get countries configuration',
+            'GET /api/dynamic - Get dynamic configuration',
+            'POST /api/verify-license - Verify a license key',
+            'POST /api/update-hwid - Update HWID for a license',
+            'POST /api/send-telegram - Send Telegram notification',
+            'GET /health - Health check'
+        ]
+    });
+});
+
+// 1️⃣ Endpoint de configuration initiale (pour le userscript)
+app.get('/api/config', (req, res) => {
+    try {
+        const config = {
+            DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
+            LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
+            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID,
+            JSONBIN_MASTER_KEY: process.env.JSONBIN_MASTER_KEY,
+            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN
+        };
+
+        console.log('📡 Config requested');
+        console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
+        console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
+        console.log('📦 COUNTRIES_BIN_ID:', config.COUNTRIES_BIN_ID ? 'Present ✓' : 'Missing ✗');
+        console.log('🔑 MASTER_KEY:', config.JSONBIN_MASTER_KEY ? 'Present ✓' : 'Missing ✗');
+        console.log('📱 BOT_TOKEN:', config.TELEGRAM_BOT_TOKEN ? 'Present ✓' : 'Missing ✗');
+
+        res.json(config);
+    } catch (error) {
+        console.error('❌ Error in /api/config:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: error.message 
+        });
+    }
+});
+
+// 2️⃣ GET /api/licenses - Récupérer toutes les licences (sécurisé)
+app.get('/api/licenses', async (req, res) => {
+    try {
+        console.log('📡 Fetching licenses from JSONBin...');
+        
+        const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
+            headers: {
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY,
+                'X-Bin-Meta': 'false'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`JSONBin returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Licenses fetched successfully');
+        
+        // Retourner directement le record (format attendu par le client)
+        res.json(data.record || data);
+        
+    } catch (error) {
+        console.error('❌ Error fetching licenses:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch licenses',
+            message: error.message
+        });
+    }
+});
+
+// 3️⃣ PUT /api/licenses/update - Mettre à jour les licences (sécurisé)
+app.put('/api/licenses/update', async (req, res) => {
+    try {
+        console.log('📝 Updating licenses in JSONBin...');
+        
+        const response = await fetch(JSONBIN_CONFIGS.licenses.UPDATE_URL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        if (!response.ok) {
+            throw new Error(`JSONBin returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Licenses updated successfully');
+        
+        res.json({ 
+            success: true, 
+            data: data 
+        });
+        
+    } catch (error) {
+        console.error('❌ Error updating licenses:', error);
+        res.status(500).json({ 
+            error: 'Failed to update licenses',
+            message: error.message
+        });
+    }
+});
+
+// 4️⃣ GET /api/countries - Récupérer la configuration des pays
+app.get('/api/countries', async (req, res) => {
+    try {
+        console.log('🌍 Fetching countries config from JSONBin...');
+        
+        const response = await fetch(JSONBIN_CONFIGS.countries.API_URL, {
+            headers: {
+                'X-Master-Key': JSONBIN_CONFIGS.countries.MASTER_KEY,
+                'X-Bin-Meta': 'false'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`JSONBin returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Countries config fetched successfully');
+        
+        // Retourner directement le record
+        res.json(data.record || data);
+        
+    } catch (error) {
+        console.error('❌ Error fetching countries config:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch countries config',
+            message: error.message
+        });
+    }
+});
+
+// 5️⃣ GET /api/dynamic - Récupérer la configuration dynamique
+app.get('/api/dynamic', async (req, res) => {
+    try {
+        console.log('🔧 Fetching dynamic config from JSONBin...');
+        
+        const response = await fetch(JSONBIN_CONFIGS.dynamic.API_URL, {
+            headers: {
+                'X-Master-Key': JSONBIN_CONFIGS.dynamic.MASTER_KEY,
+                'X-Bin-Meta': 'false'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`JSONBin returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Dynamic config fetched successfully');
+        
+        // Retourner directement le record
+        res.json(data.record || data);
+        
+    } catch (error) {
+        console.error('❌ Error fetching dynamic config:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch dynamic config',
+            message: error.message
+        });
+    }
+});
+
+// 6️⃣ POST /api/verify-license - Vérifier une licence + HWID
 app.post('/api/verify-license', async (req, res) => {
     try {
         const { licenseKey, hwid } = req.body;
@@ -56,7 +231,8 @@ app.post('/api/verify-license', async (req, res) => {
         // Récupérer les licences depuis JSONBin
         const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
             headers: {
-                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY,
+                'X-Bin-Meta': 'false'
             }
         });
 
@@ -65,7 +241,7 @@ app.post('/api/verify-license', async (req, res) => {
         }
 
         const data = await response.json();
-        const licenses = data.record;
+        const licenses = data.record || data;
 
         // Chercher la licence
         const license = licenses.authorizedKeys.find(k => k.key === licenseKey);
@@ -172,7 +348,7 @@ app.post('/api/verify-license', async (req, res) => {
     }
 });
 
-// 2️⃣ Mettre à jour le HWID d'une licence
+// 7️⃣ POST /api/update-hwid - Mettre à jour le HWID d'une licence
 app.post('/api/update-hwid', async (req, res) => {
     try {
         const { licenseKey, hwid } = req.body;
@@ -187,12 +363,17 @@ app.post('/api/update-hwid', async (req, res) => {
         // Récupérer les licences
         const getResponse = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
             headers: {
-                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY,
+                'X-Bin-Meta': 'false'
             }
         });
 
+        if (!getResponse.ok) {
+            throw new Error('Failed to fetch licenses');
+        }
+
         const data = await getResponse.json();
-        const licenses = data.record;
+        const licenses = data.record || data;
 
         // Trouver et mettre à jour la licence
         const licenseIndex = licenses.authorizedKeys.findIndex(k => k.key === licenseKey);
@@ -205,6 +386,7 @@ app.post('/api/update-hwid', async (req, res) => {
         }
 
         licenses.authorizedKeys[licenseIndex].hwid = hwid;
+        licenses.authorizedKeys[licenseIndex].hwidUpdatedAt = new Date().toISOString();
 
         // Mettre à jour JSONBin
         const updateResponse = await fetch(JSONBIN_CONFIGS.licenses.UPDATE_URL, {
@@ -220,6 +402,7 @@ app.post('/api/update-hwid', async (req, res) => {
             throw new Error('Failed to update JSONBin');
         }
 
+        console.log(`✅ HWID updated for ${licenseKey}: ${hwid}`);
         res.json({ 
             success: true, 
             message: 'HWID updated successfully' 
@@ -234,63 +417,7 @@ app.post('/api/update-hwid', async (req, res) => {
     }
 });
 
-// 3️⃣ Récupérer la configuration des pays
-app.get('/api/countries-config', async (req, res) => {
-    try {
-        const response = await fetch(JSONBIN_CONFIGS.countries.API_URL, {
-            headers: {
-                'X-Master-Key': JSONBIN_CONFIGS.countries.MASTER_KEY
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch countries config');
-        }
-
-        const data = await response.json();
-        res.json({ 
-            success: true, 
-            config: data.record 
-        });
-
-    } catch (error) {
-        console.error('Error fetching countries config:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Server error' 
-        });
-    }
-});
-
-// 4️⃣ Récupérer la configuration dynamique
-app.get('/api/dynamic-config', async (req, res) => {
-    try {
-        const response = await fetch(JSONBIN_CONFIGS.dynamic.API_URL, {
-            headers: {
-                'X-Master-Key': JSONBIN_CONFIGS.dynamic.MASTER_KEY
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch dynamic config');
-        }
-
-        const data = await response.json();
-        res.json({ 
-            success: true, 
-            config: data.record 
-        });
-
-    } catch (error) {
-        console.error('Error fetching dynamic config:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Server error' 
-        });
-    }
-});
-
-// 5️⃣ Envoyer notification Telegram (sécurisé)
+// 8️⃣ POST /api/send-telegram - Envoyer notification Telegram (sécurisé)
 app.post('/api/send-telegram', async (req, res) => {
     try {
         const { chatId, message, licenseKey } = req.body;
@@ -305,7 +432,8 @@ app.post('/api/send-telegram', async (req, res) => {
         // Vérifier que la licence est valide avant d'envoyer
         const licenseResponse = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
             headers: {
-                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY,
+                'X-Bin-Meta': 'false'
             }
         });
 
@@ -314,7 +442,8 @@ app.post('/api/send-telegram', async (req, res) => {
         }
 
         const licenseData = await licenseResponse.json();
-        const license = licenseData.record.authorizedKeys.find(k => k.key === licenseKey);
+        const licenses = licenseData.record || licenseData;
+        const license = licenses.authorizedKeys.find(k => k.key === licenseKey);
 
         if (!license || !license.active) {
             return res.json({ 
@@ -367,45 +496,12 @@ app.post('/api/send-telegram', async (req, res) => {
     }
 });
 
-// 6️⃣ Endpoint pour récupérer la configuration (pour le userscript)
-app.get('/api/config', (req, res) => {
-    try {
-        const config = {
-            DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
-            LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
-            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID,
-            JSONBIN_MASTER_KEY: process.env.JSONBIN_MASTER_KEY,
-            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN
-        };
-
-        console.log('📡 Config requested');
-        console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
-        console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
-        console.log('🔑 MASTER_KEY:', config.JSONBIN_MASTER_KEY ? 'Present ✓' : 'Missing ✗');
-        console.log('📱 BOT_TOKEN:', config.TELEGRAM_BOT_TOKEN ? 'Present ✓' : 'Missing ✗');
-
-        res.json(config);
-    } catch (error) {
-        console.error('❌ Error in /api/config:', error);
-        res.status(500).json({ 
-            error: 'Internal server error',
-            message: error.message 
-        });
-    }
-});
-
-// 6️⃣ Route racine
-app.get('/', (req, res) => {
+// 9️⃣ GET /health - Health check
+app.get('/health', (req, res) => {
     res.json({ 
-        message: '🐍 ANACONDA API Server',
-        version: '1.0.0',
-        endpoints: [
-            'POST /api/verify-license',
-            'POST /api/update-hwid',
-            'GET /api/countries-config',
-            'GET /api/dynamic-config',
-            'GET /health'
-        ]
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
     });
 });
 
@@ -413,6 +509,18 @@ app.get('/', (req, res) => {
 // 🚀 START SERVER
 // ========================================
 app.listen(PORT, () => {
-    console.log(`🐍 ANACONDA API Server running on port ${PORT}`);
-    console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+    console.log('========================================');
+    console.log('🐍 ANACONDA API SERVER STARTED');
+    console.log('========================================');
+    console.log(`🌐 Port: ${PORT}`);
+    console.log(`🔒 Security: All JSONBin keys are server-side only`);
+    console.log(`📡 Endpoints available: 9`);
+    console.log('========================================');
+    console.log('🔑 Environment Variables:');
+    console.log(`  LICENSES_BIN_ID: ${process.env.LICENSES_BIN_ID ? '✓' : '✗'}`);
+    console.log(`  COUNTRIES_BIN_ID: ${process.env.COUNTRIES_BIN_ID ? '✓' : '✗'}`);
+    console.log(`  DYNAMIC_BIN_ID: ${process.env.DYNAMIC_BIN_ID ? '✓' : '✗'}`);
+    console.log(`  JSONBIN_MASTER_KEY: ${process.env.JSONBIN_MASTER_KEY ? '✓' : '✗'}`);
+    console.log(`  TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? '✓' : '✗'}`);
+    console.log('========================================');
 });
