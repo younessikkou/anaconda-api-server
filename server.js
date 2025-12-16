@@ -150,12 +150,21 @@ function broadcastNotification(notification) {
 // 📡 WEBSOCKET INIT (NOUVEAU)
 // ========================================
 
+const MAX_CLIENTS = 1000; // Limite connexions simultanées (protection DoS)
+
 const wss = new WebSocket.Server({ 
     server: server,
     path: '/ws'
 });
 
 wss.on('connection', (ws, req) => {
+    // 🛡️ PROTECTION DoS : Limite nombre de clients
+    if (broadcastClients.size >= MAX_CLIENTS) {
+        console.warn(`⚠️ LIMITE ATTEINTE: ${MAX_CLIENTS} clients connectés`);
+        ws.close(1008, 'Server full - Too many connections');
+        return;
+    }
+
     const clientId = Date.now() + Math.random().toString(36).substr(2, 9);
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
@@ -184,13 +193,27 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', (message) => {
         try {
+            // 🛡️ PROTECTION : Limite taille message (max 10KB)
+            if (message.length > 10000) {
+                console.warn(`⚠️ Message trop grand ignoré: ${message.length} bytes`);
+                return;
+            }
+
             const data = JSON.parse(message);
+
+            // 🛡️ PROTECTION : Types autorisés uniquement
+            const allowedTypes = ['CONFIG', 'PING'];
+            if (!allowedTypes.includes(data.type)) {
+                console.warn(`⚠️ Type message non autorisé: ${data.type}`);
+                return;
+            }
 
             if (data.type === 'CONFIG') {
                 const clientInfo = broadcastClients.get(ws);
-                clientInfo.country = data.country;
-                clientInfo.center = data.center;
-                console.log(`⚙️ Client ${clientInfo.id}: ${data.country} - ${data.center}`);
+                // 🛡️ PROTECTION : Valider les valeurs
+                if (data.country) clientInfo.country = String(data.country).substring(0, 50);
+                if (data.center) clientInfo.center = String(data.center).substring(0, 50);
+                console.log(`⚙️ Client ${clientInfo.id}: ${clientInfo.country} - ${clientInfo.center}`);
             }
 
             if (data.type === 'PING') {
@@ -198,6 +221,7 @@ wss.on('connection', (ws, req) => {
             }
         } catch (err) {
             console.error('❌ Erreur message broadcaster:', err);
+            // Ne pas crasher le serveur, juste ignorer le message malformé
         }
     });
 
@@ -686,17 +710,28 @@ app.get('/health', (req, res) => {
 app.post('/broadcast/notify', (req, res) => {
     const { message, secret } = req.body;
 
+    // 🛡️ PROTECTION 1 : Secret obligatoire
     if (secret !== BROADCAST_SECRET) {
+        console.warn('⚠️ Tentative broadcast non autorisée');
         return res.status(401).json({
             success: false,
             error: 'Unauthorized - Invalid secret key'
         });
     }
 
+    // 🛡️ PROTECTION 2 : Message obligatoire
     if (!message) {
         return res.status(400).json({
             success: false,
             error: 'Message is required'
+        });
+    }
+
+    // 🛡️ PROTECTION 3 : Limite taille message (max 5000 caractères)
+    if (typeof message !== 'string' || message.length > 5000) {
+        return res.status(400).json({
+            success: false,
+            error: 'Message must be a string (max 5000 chars)'
         });
     }
 
