@@ -381,8 +381,9 @@ app.get('/', (req, res) => {
     });
 });
 
-// 1️⃣ Endpoint de configuration initiale (🔐 SÉCURISÉ - Admin uniquement)
-app.get('/api/config', authenticateAdmin, (req, res) => {
+// 1️⃣ Endpoint de configuration initiale (PUBLIC - Pour compatibilité avec anciens clients)
+// ⚠️ TEMPORAIRE: Rendu public pour rétrocompatibilité avec scripts clients déjà déployés
+app.get('/api/config', (req, res) => {
     try {
         const config = {
             DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
@@ -392,7 +393,7 @@ app.get('/api/config', authenticateAdmin, (req, res) => {
             TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN
         };
 
-        console.log('📡 Config requested (ADMIN)');
+        console.log('📡 Config requested (PUBLIC - OLD CLIENTS)');
         console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
         console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
         console.log('📦 COUNTRIES_BIN_ID:', config.COUNTRIES_BIN_ID ? 'Present ✓' : 'Missing ✗');
@@ -402,6 +403,30 @@ app.get('/api/config', authenticateAdmin, (req, res) => {
         res.json(config);
     } catch (error) {
         console.error('❌ Error in /api/config:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: error.message 
+        });
+    }
+});
+
+// 🔐 Endpoint ADMIN sécurisé (nouveau - pour usage administrateur)
+app.get('/api/admin/config', authenticateAdmin, (req, res) => {
+    try {
+        const config = {
+            DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
+            LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
+            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID,
+            JSONBIN_MASTER_KEY: process.env.JSONBIN_MASTER_KEY,
+            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+            ADMIN_TOKEN: process.env.ADMIN_TOKEN,
+            BROADCAST_SECRET: process.env.BROADCAST_SECRET
+        };
+
+        console.log('📡 Admin config requested (SECURE)');
+        res.json(config);
+    } catch (error) {
+        console.error('❌ Error in /api/admin/config:', error);
         res.status(500).json({ 
             error: 'Internal server error',
             message: error.message 
