@@ -2,6 +2,7 @@
 // 🐍 ANACONDA API SERVER - Railway Deploy
 // ========================================
 // Serveur API pour cacher les clés JSONBin + BROADCASTER
+// 🔐 Security Update: Admin token protection active (v2.1.1)
 
 const express = require('express');
 const http = require('http');  // ← NOUVEAU pour WebSocket
