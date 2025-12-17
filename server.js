@@ -434,10 +434,11 @@ app.get('/api/admin/config', authenticateAdmin, (req, res) => {
     }
 });
 
-// 2️⃣ GET /api/licenses - Récupérer toutes les licences (🔐 SÉCURISÉ)
-app.get('/api/licenses', authenticateAdmin, async (req, res) => {
+// 2️⃣ GET /api/licenses - Récupérer toutes les licences (PUBLIC - Pour compatibilité)
+// ⚠️ TEMPORAIRE: Rendu public pour rétrocompatibilité avec scripts v10.0 déjà déployés
+app.get('/api/licenses', async (req, res) => {
     try {
-        console.log('📡 Fetching licenses from JSONBin...');
+        console.log('� Fetching licenses from JSONBin (PUBLIC - OLD CLIENTS)...');
         
         const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
             headers: {
@@ -452,6 +453,36 @@ app.get('/api/licenses', authenticateAdmin, async (req, res) => {
 
         const data = await response.json();
         console.log('✅ Licenses fetched successfully');
+        
+        res.json(data.record || data);
+        
+    } catch (error) {
+        console.error('❌ Error fetching licenses:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch licenses',
+            message: error.message
+        });
+    }
+});
+
+// 🔐 Endpoint ADMIN pour les licences (nouveau - sécurisé)
+app.get('/api/admin/licenses', authenticateAdmin, async (req, res) => {
+    try {
+        console.log('📡 Fetching licenses from JSONBin (ADMIN - SECURE)...');
+        
+        const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
+            headers: {
+                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY,
+                'X-Bin-Meta': 'false'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`JSONBin returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Licenses fetched successfully (ADMIN)');
         
         res.json(data.record || data);
         
