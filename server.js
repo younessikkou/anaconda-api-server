@@ -46,6 +46,33 @@ const JSONBIN_CONFIGS = {
 // ========================================
 const BROADCAST_SECRET = process.env.BROADCAST_SECRET || 'ANACONDA_BROADCAST_KEY_2025';
 
+// ========================================
+// 🔐 SÉCURITÉ - Admin Token
+// ========================================
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'ANACONDA_ADMIN_SECRET_2025';
+
+// Middleware d'authentification pour les endpoints sensibles
+function authenticateAdmin(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    
+    if (!token) {
+        return res.status(401).json({ 
+            error: 'Authentication required',
+            message: 'Missing Authorization header. Use: Bearer YOUR_TOKEN'
+        });
+    }
+    
+    if (token !== ADMIN_TOKEN) {
+        return res.status(403).json({ 
+            error: 'Access denied',
+            message: 'Invalid admin token'
+        });
+    }
+    
+    next();
+}
+
 let broadcastStats = {
     totalNotifications: 0,
     totalClients: 0,
@@ -300,8 +327,8 @@ app.get('/api/config', (req, res) => {
     }
 });
 
-// 2️⃣ GET /api/licenses - Récupérer toutes les licences (sécurisé)
-app.get('/api/licenses', async (req, res) => {
+// 2️⃣ GET /api/licenses - Récupérer toutes les licences (🔐 SÉCURISÉ)
+app.get('/api/licenses', authenticateAdmin, async (req, res) => {
     try {
         console.log('📡 Fetching licenses from JSONBin...');
         
@@ -331,7 +358,7 @@ app.get('/api/licenses', async (req, res) => {
 });
 
 // 3️⃣ PUT /api/licenses/update - Mettre à jour les licences (sécurisé)
-app.put('/api/licenses/update', async (req, res) => {
+app.put('/api/licenses/update', authenticateAdmin, async (req, res) => {
     try {
         console.log('📝 Updating licenses in JSONBin...');
         
