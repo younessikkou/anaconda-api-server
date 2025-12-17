@@ -302,8 +302,8 @@ app.get('/', (req, res) => {
     });
 });
 
-// 1️⃣ Endpoint de configuration initiale (pour le userscript)
-app.get('/api/config', (req, res) => {
+// 1️⃣ Endpoint de configuration initiale (🔐 SÉCURISÉ - Admin uniquement)
+app.get('/api/config', authenticateAdmin, (req, res) => {
     try {
         const config = {
             DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
@@ -313,7 +313,7 @@ app.get('/api/config', (req, res) => {
             TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN
         };
 
-        console.log('📡 Config requested');
+        console.log('📡 Config requested (ADMIN)');
         console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
         console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
         console.log('📦 COUNTRIES_BIN_ID:', config.COUNTRIES_BIN_ID ? 'Present ✓' : 'Missing ✗');
