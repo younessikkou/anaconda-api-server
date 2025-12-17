@@ -50,7 +50,14 @@ const BROADCAST_SECRET = process.env.BROADCAST_SECRET || 'ANACONDA_BROADCAST_KEY
 // ========================================
 // 🔐 SÉCURITÉ - Admin Token
 // ========================================
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'ANACONDA_ADMIN_SECRET_2025';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+
+// Vérifier que le token est défini
+if (!ADMIN_TOKEN) {
+    console.error('❌ ERREUR CRITIQUE: ADMIN_TOKEN non défini dans les variables d\'environnement!');
+    console.error('🔧 Ajoutez ADMIN_TOKEN dans Railway Variables');
+    process.exit(1);
+}
 
 // Middleware d'authentification pour les endpoints sensibles
 function authenticateAdmin(req, res, next) {
