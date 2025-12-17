@@ -54,12 +54,63 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'VlQ0zUuS4PXNqdgWyx97D3fJMhnFIbco
 
 console.log('🔐 ADMIN_TOKEN chargé:', ADMIN_TOKEN ? `${ADMIN_TOKEN.substring(0, 10)}...` : 'NON DÉFINI');
 
+// Stockage des logs de sécurité (déclaré avant authenticateAdmin)
+let securityLogs = {
+    unauthorizedAttempts: [],
+    invalidTokenAttempts: [],
+    authorizedAccess: []
+};
+
+const MAX_LOGS = 100;
+
+// Helper pour ajouter un log de sécurité
+function addSecurityLog(type, data) {
+    const log = {
+        ...data,
+        timestamp: new Date().toISOString()
+    };
+    
+    if (type === 'unauthorized') {
+        securityLogs.unauthorizedAttempts.unshift(log);
+        if (securityLogs.unauthorizedAttempts.length > MAX_LOGS) {
+            securityLogs.unauthorizedAttempts.pop();
+        }
+    } else if (type === 'invalid_token') {
+        securityLogs.invalidTokenAttempts.unshift(log);
+        if (securityLogs.invalidTokenAttempts.length > MAX_LOGS) {
+            securityLogs.invalidTokenAttempts.pop();
+        }
+    } else if (type === 'authorized') {
+        securityLogs.authorizedAccess.unshift(log);
+        if (securityLogs.authorizedAccess.length > MAX_LOGS) {
+            securityLogs.authorizedAccess.pop();
+        }
+    }
+}
+
 // Middleware d'authentification pour les endpoints sensibles
 function authenticateAdmin(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown';
+    const endpoint = req.originalUrl || req.url;
+    const userAgent = req.headers['user-agent'] || 'Unknown';
     
     if (!token) {
+        // 🚨 LOG: Tentative d'accès sans token
+        console.warn(`⚠️ UNAUTHORIZED ACCESS ATTEMPT:`);
+        console.warn(`   IP: ${clientIp}`);
+        console.warn(`   Endpoint: ${endpoint}`);
+        console.warn(`   Time: ${new Date().toISOString()}`);
+        console.warn(`   User-Agent: ${userAgent}`);
+        
+        addSecurityLog('unauthorized', {
+            ip: clientIp,
+            endpoint: endpoint,
+            userAgent: userAgent,
+            reason: 'Missing token'
+        });
+        
         return res.status(401).json({ 
             error: 'Authentication required',
             message: 'Missing Authorization header. Use: Bearer YOUR_TOKEN'
@@ -67,11 +118,39 @@ function authenticateAdmin(req, res, next) {
     }
     
     if (token !== ADMIN_TOKEN) {
+        // 🚨 LOG: Tentative avec mauvais token (possible attaque)
+        console.error(`🚨 SECURITY ALERT - INVALID TOKEN ATTEMPT:`);
+        console.error(`   IP: ${clientIp}`);
+        console.error(`   Endpoint: ${endpoint}`);
+        console.error(`   Token (first 10 chars): ${token.substring(0, 10)}...`);
+        console.error(`   Time: ${new Date().toISOString()}`);
+        console.error(`   User-Agent: ${userAgent}`);
+        
+        addSecurityLog('invalid_token', {
+            ip: clientIp,
+            endpoint: endpoint,
+            tokenPreview: token.substring(0, 10) + '...',
+            userAgent: userAgent,
+            reason: 'Invalid token'
+        });
+        
         return res.status(403).json({ 
             error: 'Access denied',
             message: 'Invalid admin token'
         });
     }
+    
+    // ✅ LOG: Accès autorisé
+    console.log(`✅ ADMIN ACCESS GRANTED:`);
+    console.log(`   IP: ${clientIp}`);
+    console.log(`   Endpoint: ${endpoint}`);
+    console.log(`   Time: ${new Date().toISOString()}`);
+    
+    addSecurityLog('authorized', {
+        ip: clientIp,
+        endpoint: endpoint,
+        userAgent: userAgent
+    });
     
     next();
 }
@@ -815,8 +894,27 @@ app.get('/broadcast/health', (req, res) => {
     });
 });
 
+// 1️⃣3️⃣ GET /security/logs - Voir les logs de sécurité (protégé)
+app.get('/security/logs', authenticateAdmin, (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    
+    res.json({
+        summary: {
+            totalUnauthorizedAttempts: securityLogs.unauthorizedAttempts.length,
+            totalInvalidTokenAttempts: securityLogs.invalidTokenAttempts.length,
+            totalAuthorizedAccess: securityLogs.authorizedAccess.length,
+            lastCheck: new Date().toISOString()
+        },
+        recentLogs: {
+            unauthorizedAttempts: securityLogs.unauthorizedAttempts.slice(0, limit),
+            invalidTokenAttempts: securityLogs.invalidTokenAttempts.slice(0, limit),
+            authorizedAccess: securityLogs.authorizedAccess.slice(0, limit)
+        }
+    });
+});
+
 // ========================================
-// 🚀 START SERVER (MODIFIÉ)
+// �🚀 START SERVER (MODIFIÉ)
 // ========================================
 server.listen(PORT, () => {  // ← MODIFIÉ: utiliser 'server' au lieu de 'app'
     console.log('========================================');
