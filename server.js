@@ -381,24 +381,25 @@ app.get('/', (req, res) => {
     });
 });
 
-// 1️⃣ Endpoint de configuration initiale (PUBLIC - Pour compatibilité avec anciens clients)
-// ⚠️ TEMPORAIRE: Rendu public pour rétrocompatibilité avec scripts clients déjà déployés
+// 1️⃣ Endpoint de configuration initiale (PUBLIC - SÉCURISÉ)
+// ✅ Ne retourne QUE les BIN IDs publics (pas de secrets)
+// ✅ Compatible avec ANACONDA v10.0 (qui n'utilise jamais les secrets directement)
 app.get('/api/config', (req, res) => {
     try {
         const config = {
             DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
             LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
-            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID,
-            JSONBIN_MASTER_KEY: process.env.JSONBIN_MASTER_KEY,
-            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN
+            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID
+            // 🔒 SÉCURITÉ: JSONBIN_MASTER_KEY et TELEGRAM_BOT_TOKEN sont CACHÉS
+            // Le client utilise /api/send-telegram et /api/verify-license
+            // qui gèrent ces secrets côté serveur
         };
 
-        console.log('📡 Config requested (PUBLIC - OLD CLIENTS)');
+        console.log('📡 Config requested (PUBLIC - SECURE)');
         console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
         console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
         console.log('📦 COUNTRIES_BIN_ID:', config.COUNTRIES_BIN_ID ? 'Present ✓' : 'Missing ✗');
-        console.log('🔑 MASTER_KEY:', config.JSONBIN_MASTER_KEY ? 'Present ✓' : 'Missing ✗');
-        console.log('📱 BOT_TOKEN:', config.TELEGRAM_BOT_TOKEN ? 'Present ✓' : 'Missing ✗');
+        console.log('� Secrets NOT exposed to client (server-side only)');
 
         res.json(config);
     } catch (error) {
