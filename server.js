@@ -2,17 +2,17 @@
 // 🐍 ANACONDA API SERVER - Railway Deploy
 // ========================================
 // Serveur API pour cacher les clés JSONBin + BROADCASTER
-// 🔐 Security Update: Admin token protection active (v2.1.1)
+// 🔐 Security Update: Admin token protection + /api/licenses SÉCURISÉ (v2.2.0)
 
 const express = require('express');
-const http = require('http');  // ← NOUVEAU pour WebSocket
-const WebSocket = require('ws');  // ← NOUVEAU
+const http = require('http');
+const WebSocket = require('ws');
 const cors = require('cors');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
-const server = http.createServer(app);  // ← MODIFIÉ: créer server HTTP
+const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
 
@@ -43,7 +43,7 @@ const JSONBIN_CONFIGS = {
 };
 
 // ========================================
-// 📡 BROADCASTER CONFIG (NOUVEAU)
+// 📡 BROADCASTER CONFIG
 // ========================================
 const BROADCAST_SECRET = process.env.BROADCAST_SECRET || 'ANACONDA_BROADCAST_KEY_2025';
 
@@ -54,7 +54,7 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'VlQ0zUuS4PXNqdgWyx97D3fJMhnFIbco
 
 console.log('🔐 ADMIN_TOKEN chargé:', ADMIN_TOKEN ? `${ADMIN_TOKEN.substring(0, 10)}...` : 'NON DÉFINI');
 
-// Stockage des logs de sécurité (déclaré avant authenticateAdmin)
+// Stockage des logs de sécurité
 let securityLogs = {
     unauthorizedAttempts: [],
     invalidTokenAttempts: [],
@@ -97,7 +97,6 @@ function authenticateAdmin(req, res, next) {
     const userAgent = req.headers['user-agent'] || 'Unknown';
     
     if (!token) {
-        // 🚨 LOG: Tentative d'accès sans token
         console.warn(`⚠️ UNAUTHORIZED ACCESS ATTEMPT:`);
         console.warn(`   IP: ${clientIp}`);
         console.warn(`   Endpoint: ${endpoint}`);
@@ -118,7 +117,6 @@ function authenticateAdmin(req, res, next) {
     }
     
     if (token !== ADMIN_TOKEN) {
-        // 🚨 LOG: Tentative avec mauvais token (possible attaque)
         console.error(`🚨 SECURITY ALERT - INVALID TOKEN ATTEMPT:`);
         console.error(`   IP: ${clientIp}`);
         console.error(`   Endpoint: ${endpoint}`);
@@ -140,7 +138,6 @@ function authenticateAdmin(req, res, next) {
         });
     }
     
-    // ✅ LOG: Accès autorisé
     console.log(`✅ ADMIN ACCESS GRANTED:`);
     console.log(`   IP: ${clientIp}`);
     console.log(`   Endpoint: ${endpoint}`);
@@ -166,7 +163,7 @@ let broadcastStats = {
 const broadcastClients = new Map();
 
 // ========================================
-// 📡 BROADCASTER FUNCTIONS (NOUVEAU)
+// 📡 BROADCASTER FUNCTIONS
 // ========================================
 
 function parseNotification(message) {
@@ -256,10 +253,10 @@ function broadcastNotification(notification) {
 }
 
 // ========================================
-// 📡 WEBSOCKET INIT (NOUVEAU)
+// 📡 WEBSOCKET INIT
 // ========================================
 
-const MAX_CLIENTS = 1000; // Limite connexions simultanées (protection DoS)
+const MAX_CLIENTS = 1000;
 
 const wss = new WebSocket.Server({ 
     server: server,
@@ -267,7 +264,6 @@ const wss = new WebSocket.Server({
 });
 
 wss.on('connection', (ws, req) => {
-    // 🛡️ PROTECTION DoS : Limite nombre de clients
     if (broadcastClients.size >= MAX_CLIENTS) {
         console.warn(`⚠️ LIMITE ATTEINTE: ${MAX_CLIENTS} clients connectés`);
         ws.close(1008, 'Server full - Too many connections');
@@ -302,7 +298,6 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', (message) => {
         try {
-            // 🛡️ PROTECTION : Limite taille message (max 10KB)
             if (message.length > 10000) {
                 console.warn(`⚠️ Message trop grand ignoré: ${message.length} bytes`);
                 return;
@@ -310,7 +305,6 @@ wss.on('connection', (ws, req) => {
 
             const data = JSON.parse(message);
 
-            // 🛡️ PROTECTION : Types autorisés uniquement
             const allowedTypes = ['CONFIG', 'PING'];
             if (!allowedTypes.includes(data.type)) {
                 console.warn(`⚠️ Type message non autorisé: ${data.type}`);
@@ -319,7 +313,6 @@ wss.on('connection', (ws, req) => {
 
             if (data.type === 'CONFIG') {
                 const clientInfo = broadcastClients.get(ws);
-                // 🛡️ PROTECTION : Valider les valeurs
                 if (data.country) clientInfo.country = String(data.country).substring(0, 50);
                 if (data.center) clientInfo.center = String(data.center).substring(0, 50);
                 console.log(`⚙️ Client ${clientInfo.id}: ${clientInfo.country} - ${clientInfo.center}`);
@@ -330,7 +323,6 @@ wss.on('connection', (ws, req) => {
             }
         } catch (err) {
             console.error('❌ Erreur message broadcaster:', err);
-            // Ne pas crasher le serveur, juste ignorer le message malformé
         }
     });
 
@@ -349,26 +341,26 @@ wss.on('connection', (ws, req) => {
 console.log('🐍 Broadcaster WebSocket initialisé sur /ws');
 
 // ========================================
-// 🔐 API ENDPOINTS (VOTRE CODE EXISTANT)
+// 🔐 API ENDPOINTS SÉCURISÉS
 // ========================================
 
-// 0️⃣ Route racine (MODIFIÉE - ajout broadcaster)
+// 0️⃣ Route racine
 app.get('/', (req, res) => {
     res.json({ 
         message: '🐍 ANACONDA API Server + Broadcaster',
-        version: '2.1.0',
+        version: '2.2.0 - SECURE',
         broadcaster: {
             active: true,
             clients: broadcastStats.activeClients,
             notifications: broadcastStats.totalNotifications
         },
         endpoints: [
-            'GET /api/config - Get initial configuration',
-            'GET /api/licenses - Get all licenses (secure)',
-            'PUT /api/licenses/update - Update licenses (secure)',
+            'GET /api/config - Get initial configuration (PUBLIC)',
+            '🔒 GET /api/licenses - Get all licenses (PROTECTED - ADMIN ONLY)',
+            '🔒 PUT /api/licenses/update - Update licenses (PROTECTED - ADMIN ONLY)',
             'GET /api/countries - Get countries configuration',
             'GET /api/dynamic - Get dynamic configuration',
-            'POST /api/verify-license - Verify a license key',
+            '✅ POST /api/verify-license - Verify a single license (SECURE)',
             'POST /api/update-hwid - Update HWID for a license',
             'POST /api/send-telegram - Send Telegram notification',
             'GET /health - Health check',
@@ -376,31 +368,22 @@ app.get('/', (req, res) => {
             'WebSocket /ws - Broadcaster client connection',
             'POST /broadcast/notify - Send notification to all clients',
             'GET /broadcast/stats - Broadcaster statistics',
-            'GET /broadcast/health - Broadcaster health check'
+            'GET /broadcast/health - Broadcaster health check',
+            '🔒 GET /security/logs - Security logs (PROTECTED - ADMIN ONLY)'
         ]
     });
 });
 
 // 1️⃣ Endpoint de configuration initiale (PUBLIC - SÉCURISÉ)
-// ✅ Ne retourne QUE les BIN IDs publics (pas de secrets)
-// ✅ Compatible avec ANACONDA v10.0 (qui n'utilise jamais les secrets directement)
 app.get('/api/config', (req, res) => {
     try {
         const config = {
             DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
             LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
             COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID
-            // 🔒 SÉCURITÉ: JSONBIN_MASTER_KEY et TELEGRAM_BOT_TOKEN sont CACHÉS
-            // Le client utilise /api/send-telegram et /api/verify-license
-            // qui gèrent ces secrets côté serveur
         };
 
         console.log('📡 Config requested (PUBLIC - SECURE)');
-        console.log('📦 DYNAMIC_BIN_ID:', config.DYNAMIC_BIN_ID ? 'Present ✓' : 'Missing ✗');
-        console.log('📦 LICENSES_BIN_ID:', config.LICENSES_BIN_ID ? 'Present ✓' : 'Missing ✗');
-        console.log('📦 COUNTRIES_BIN_ID:', config.COUNTRIES_BIN_ID ? 'Present ✓' : 'Missing ✗');
-        console.log('� Secrets NOT exposed to client (server-side only)');
-
         res.json(config);
     } catch (error) {
         console.error('❌ Error in /api/config:', error);
@@ -411,65 +394,10 @@ app.get('/api/config', (req, res) => {
     }
 });
 
-// 🔐 Endpoint ADMIN sécurisé (nouveau - pour usage administrateur)
-app.get('/api/admin/config', authenticateAdmin, (req, res) => {
+// 2️⃣ 🔒 GET /api/licenses - PROTÉGÉ PAR ADMIN TOKEN (NOUVEAU!)
+app.get('/api/licenses', authenticateAdmin, async (req, res) => {
     try {
-        const config = {
-            DYNAMIC_BIN_ID: process.env.DYNAMIC_BIN_ID,
-            LICENSES_BIN_ID: process.env.LICENSES_BIN_ID,
-            COUNTRIES_BIN_ID: process.env.COUNTRIES_BIN_ID,
-            JSONBIN_MASTER_KEY: process.env.JSONBIN_MASTER_KEY,
-            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-            ADMIN_TOKEN: process.env.ADMIN_TOKEN,
-            BROADCAST_SECRET: process.env.BROADCAST_SECRET
-        };
-
-        console.log('📡 Admin config requested (SECURE)');
-        res.json(config);
-    } catch (error) {
-        console.error('❌ Error in /api/admin/config:', error);
-        res.status(500).json({ 
-            error: 'Internal server error',
-            message: error.message 
-        });
-    }
-});
-
-// 2️⃣ GET /api/licenses - Récupérer toutes les licences (PUBLIC - Pour compatibilité)
-// ⚠️ TEMPORAIRE: Rendu public pour rétrocompatibilité avec scripts v10.0 déjà déployés
-app.get('/api/licenses', async (req, res) => {
-    try {
-        console.log('� Fetching licenses from JSONBin (PUBLIC - OLD CLIENTS)...');
-        
-        const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
-            headers: {
-                'X-Master-Key': JSONBIN_CONFIGS.licenses.MASTER_KEY,
-                'X-Bin-Meta': 'false'
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`JSONBin returned status ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('✅ Licenses fetched successfully');
-        
-        res.json(data.record || data);
-        
-    } catch (error) {
-        console.error('❌ Error fetching licenses:', error);
-        res.status(500).json({ 
-            error: 'Failed to fetch licenses',
-            message: error.message
-        });
-    }
-});
-
-// 🔐 Endpoint ADMIN pour les licences (nouveau - sécurisé)
-app.get('/api/admin/licenses', authenticateAdmin, async (req, res) => {
-    try {
-        console.log('📡 Fetching licenses from JSONBin (ADMIN - SECURE)...');
+        console.log('🔐 Fetching licenses (ADMIN - PROTECTED)...');
         
         const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
             headers: {
@@ -496,7 +424,7 @@ app.get('/api/admin/licenses', authenticateAdmin, async (req, res) => {
     }
 });
 
-// 3️⃣ PUT /api/licenses/update - Mettre à jour les licences (sécurisé)
+// 3️⃣ PUT /api/licenses/update - Mettre à jour les licences (protégé)
 app.put('/api/licenses/update', authenticateAdmin, async (req, res) => {
     try {
         console.log('📝 Updating licenses in JSONBin...');
@@ -591,7 +519,7 @@ app.get('/api/dynamic', async (req, res) => {
     }
 });
 
-// 6️⃣ POST /api/verify-license - Vérifier une licence + HWID
+// 6️⃣ ✅ POST /api/verify-license - Vérifier UNE licence (SÉCURISÉ)
 app.post('/api/verify-license', async (req, res) => {
     try {
         const { licenseKey, hwid } = req.body;
@@ -602,6 +530,13 @@ app.post('/api/verify-license', async (req, res) => {
                 error: 'License key and HWID required' 
             });
         }
+
+        // Log de sécurité
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        console.log(`🔍 License verification attempt:`);
+        console.log(`   IP: ${clientIp}`);
+        console.log(`   Key: ${licenseKey.substring(0, 10)}...`);
+        console.log(`   HWID: ${hwid.substring(0, 12)}...`);
 
         const response = await fetch(JSONBIN_CONFIGS.licenses.API_URL, {
             headers: {
@@ -620,6 +555,7 @@ app.post('/api/verify-license', async (req, res) => {
         const license = licenses.authorizedKeys.find(k => k.key === licenseKey);
 
         if (!license) {
+            console.log(`❌ Invalid license key: ${licenseKey.substring(0, 10)}...`);
             return res.json({ 
                 success: false, 
                 error: 'Invalid license key' 
@@ -641,6 +577,7 @@ app.post('/api/verify-license', async (req, res) => {
         }
 
         if (license.hwid && license.hwid !== hwid) {
+            console.log(`❌ HWID mismatch for ${license.user}`);
             return res.json({ 
                 success: false, 
                 error: 'HWID mismatch - This license is locked to another device' 
@@ -681,11 +618,13 @@ app.post('/api/verify-license', async (req, res) => {
             if (!updateResponse.ok) {
                 console.error('Failed to update HWID in JSONBin');
             } else {
-                console.log(`✅ HWID registered for ${licenseKey}: ${hwid}`);
+                console.log(`✅ HWID registered for ${licenseKey}: ${hwid.substring(0, 12)}...`);
                 license.hwid = hwid;
                 license.hwidRegisteredAt = licenses.authorizedKeys[licenseIndex].hwidRegisteredAt;
             }
         }
+
+        console.log(`✅ License verified successfully: ${license.user}`);
 
         res.json({ 
             success: true,
@@ -693,6 +632,7 @@ app.post('/api/verify-license', async (req, res) => {
             license: {
                 key: license.key,
                 user: license.user,
+                email: license.email,
                 active: license.active,
                 hwid: license.hwid,
                 expiresAt: license.expiresAt,
@@ -869,14 +809,13 @@ app.get('/health', (req, res) => {
 });
 
 // ========================================
-// 📡 BROADCASTER ROUTES (NOUVEAU)
+// 📡 BROADCASTER ROUTES
 // ========================================
 
 // 🔟 POST /broadcast/notify - Recevoir notification Telegram
 app.post('/broadcast/notify', (req, res) => {
     const { message, secret } = req.body;
 
-    // 🛡️ PROTECTION 1 : Secret obligatoire
     if (secret !== BROADCAST_SECRET) {
         console.warn('⚠️ Tentative broadcast non autorisée');
         return res.status(401).json({
@@ -885,7 +824,6 @@ app.post('/broadcast/notify', (req, res) => {
         });
     }
 
-    // 🛡️ PROTECTION 2 : Message obligatoire
     if (!message) {
         return res.status(400).json({
             success: false,
@@ -893,7 +831,6 @@ app.post('/broadcast/notify', (req, res) => {
         });
     }
 
-    // 🛡️ PROTECTION 3 : Limite taille message (max 5000 caractères)
     if (typeof message !== 'string' || message.length > 5000) {
         return res.status(400).json({
             success: false,
@@ -971,14 +908,15 @@ app.get('/security/logs', authenticateAdmin, (req, res) => {
 });
 
 // ========================================
-// �🚀 START SERVER (MODIFIÉ)
+// 🚀 START SERVER
 // ========================================
-server.listen(PORT, () => {  // ← MODIFIÉ: utiliser 'server' au lieu de 'app'
+server.listen(PORT, () => {
     console.log('========================================');
     console.log('🐍 ANACONDA API SERVER + BROADCASTER');
     console.log('========================================');
     console.log(`🌐 Port: ${PORT}`);
-    console.log(`🔒 Security: All JSONBin keys are server-side only`);
+    console.log(`🔒 Security: /api/licenses PROTECTED (v2.2.0)`);
+    console.log(`🔒 Use /api/verify-license for single license check`);
     console.log(`📡 API Endpoints: 9`);
     console.log(`📡 Broadcaster Endpoints: 3`);
     console.log(`📡 WebSocket: /ws (Clients: ${broadcastStats.activeClients})`);
@@ -990,5 +928,12 @@ server.listen(PORT, () => {  // ← MODIFIÉ: utiliser 'server' au lieu de 'app'
     console.log(`  JSONBIN_MASTER_KEY: ${process.env.JSONBIN_MASTER_KEY ? '✓' : '✗'}`);
     console.log(`  TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? '✓' : '✗'}`);
     console.log(`  BROADCAST_SECRET: ${process.env.BROADCAST_SECRET ? '✓' : '✗'}`);
+    console.log(`  ADMIN_TOKEN: ${ADMIN_TOKEN ? '✓' : '✗'}`);
+    console.log('========================================');
+    console.log('🔐 SECURITY UPDATES (v2.2.0):');
+    console.log('   ✅ /api/licenses is now PROTECTED (requires ADMIN_TOKEN)');
+    console.log('   ✅ Clients use /api/verify-license for single license check');
+    console.log('   ✅ All license data stays server-side');
     console.log('========================================');
 });
+
