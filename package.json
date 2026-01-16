@@ -4,7 +4,7 @@
   "description": "Secure API server for ANACONDA VFS booking system + Broadcaster",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "echo 'Service stopped' && exit 0",
     "dev": "nodemon server.js"
   },
   "dependencies": {
