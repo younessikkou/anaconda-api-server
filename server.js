@@ -305,7 +305,7 @@ wss.on('connection', (ws, req) => {
 
             const data = JSON.parse(message);
 
-            const allowedTypes = ['CONFIG', 'PING'];
+            const allowedTypes = ['CONFIG', 'PING', 'VFS_STATUS'];
             if (!allowedTypes.includes(data.type)) {
                 console.warn(`⚠️ Type message non autorisé: ${data.type}`);
                 return;
@@ -315,11 +315,23 @@ wss.on('connection', (ws, req) => {
                 const clientInfo = broadcastClients.get(ws);
                 if (data.country) clientInfo.country = String(data.country).substring(0, 50);
                 if (data.center) clientInfo.center = String(data.center).substring(0, 50);
-                console.log(`⚙️ Client ${clientInfo.id}: ${clientInfo.country} - ${clientInfo.center}`);
+                if (data.clientType) clientInfo.clientType = String(data.clientType).substring(0, 50);
+                if (data.nldCount !== undefined) clientInfo.nldCount = data.nldCount;
+                console.log(`⚙️ Client ${clientInfo.id}: ${clientInfo.country} - ${clientInfo.center} - type: ${clientInfo.clientType}`);
             }
 
             if (data.type === 'PING') {
                 ws.send(JSON.stringify({ type: 'PONG', timestamp: new Date().toISOString() }));
+            }
+
+            if (data.type === 'VFS_STATUS') {
+                // Un VFS Trigger envoie son statut (nombre de nav, booking en cours, etc.)
+                const clientInfo = broadcastClients.get(ws);
+                if (clientInfo) {
+                    clientInfo.vfsStatus = data.status;
+                    clientInfo.nldCount = data.nldCount;
+                }
+                console.log(`📊 VFS Status from ${clientInfo?.id}: ${JSON.stringify(data.status)}`);
             }
         } catch (err) {
             console.error('❌ Erreur message broadcaster:', err);
@@ -860,6 +872,72 @@ app.post('/broadcast/notify', (req, res) => {
     });
 });
 
+// 🔴 POST /broadcast/trigger-booking - Déclencher une réservation sur tous les VFS Trigger connectés
+app.post('/broadcast/trigger-booking', (req, res) => {
+    const { secret, applicants, target, city, visa_type, center, note } = req.body;
+
+    if (secret !== BROADCAST_SECRET) {
+        console.warn('⚠️ Tentative trigger-booking non autorisée');
+        return res.status(401).json({
+            success: false,
+            error: 'Unauthorized - Invalid secret key'
+        });
+    }
+
+    const payload = JSON.stringify({
+        type: 'TRIGGER_BOOKING',
+        applicants: applicants || [],
+        target: target || 'all',       // 'all' ou numéro NLD spécifique
+        city: city || null,
+        visa_type: visa_type || null,
+        center: center || null,
+        note: note || '',
+        timestamp: new Date().toISOString()
+    });
+
+    let sentCount = 0;
+    broadcastClients.forEach((clientInfo, ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(payload);
+            sentCount++;
+        }
+    });
+
+    console.log(`🔴 TRIGGER_BOOKING envoyé à ${sentCount} client(s) VFS Trigger`);
+    console.log(`   Applicants: ${(applicants || []).length} | Target: ${target || 'all'} | City: ${city || 'any'}`);
+
+    res.json({
+        success: true,
+        clientsTriggered: sentCount,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// 🔴 POST /broadcast/stop-all - Stopper toutes les réservations en cours
+app.post('/broadcast/stop-all', (req, res) => {
+    const { secret } = req.body;
+
+    if (secret !== BROADCAST_SECRET) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const payload = JSON.stringify({
+        type: 'STOP_ALL',
+        timestamp: new Date().toISOString()
+    });
+
+    let sentCount = 0;
+    broadcastClients.forEach((clientInfo, ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(payload);
+            sentCount++;
+        }
+    });
+
+    console.log(`🛑 STOP_ALL envoyé à ${sentCount} client(s)`);
+    res.json({ success: true, clientsStopped: sentCount, timestamp: new Date().toISOString() });
+});
+
 // 1️⃣1️⃣ GET /broadcast/stats - Statistiques broadcaster
 app.get('/broadcast/stats', (req, res) => {
     const uptime = Math.floor((new Date() - broadcastStats.startTime) / 1000);
@@ -936,4 +1014,3 @@ server.listen(PORT, () => {
     console.log('   ✅ All license data stays server-side');
     console.log('========================================');
 });
-
